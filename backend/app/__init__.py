@@ -25,6 +25,12 @@ def create_app():
     login_manager.init_app(app)
 
     # Register blueprints
-    from app.routes import main
-    app.register_blueprint(main.bp)
+    from app.routes import auth, posts
+    app.register_blueprint(auth.bp)
+    app.register_blueprint(posts.bp)
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+    
     return app
