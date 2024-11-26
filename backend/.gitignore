@@ -22,3 +22,7 @@ yarn-error.log*
 
 # Database
 instance/
+
+# Cookies
+.flask-session/
+cookies.txt
