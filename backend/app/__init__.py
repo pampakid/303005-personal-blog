@@ -7,6 +7,7 @@ from flask_login import LoginManager
 from pathlib import Path
 import os
 
+
 # Initialize extensions 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -32,5 +33,9 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+    
+    # Register CLI commands
+    from app import cli
+    cli.init_app(app)
     
     return app

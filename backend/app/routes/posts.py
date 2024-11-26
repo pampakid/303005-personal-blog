@@ -3,98 +3,75 @@ from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from app.models.post import Post, Tag
 from app import db
+import traceback  # Add this for detailed error logging
 
 bp = Blueprint('posts', __name__)
-
-@bp.route('/api/posts', methods=['GET'])
-def get_posts():
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    return jsonify([{
-        'id': post.id,
-        'title': post.title,
-        'content': post.content,
-        'author': post.author.username,
-        'created_at': post.created_at,
-        'tags': [tag.name for tag in post.tags]
-    } for post in posts])
 
 @bp.route('/api/posts', methods=['POST'])
 @login_required
 def create_post():
-    data = request.get_json()
-    
-    # Handle tags
-    tag_names = data.get('tags', [])
-    tags = []
-    for tag_name in tag_names:
-        tag = Tag.query.filter_by(name=tag_name).first()
-        if not tag:
-            tag = Tag(name=tag_name)
-            db.session.add(tag)
-        tags.append(tag)
+    try:
+        print("Received request to create post")  # Debug log
+        data = request.get_json()
+        print(f"Request data: {data}")  # Debug log
+        
+        # Validate required fields
+        if not data or 'title' not in data or 'content' not in data:
+            return jsonify({'error': 'Title and content are required'}), 400
 
-    post = Post(
-        title=data['title'],
-        content=data['content'],
-        author=current_user,
-        tags=tags
-    )
-    
-    db.session.add(post)
-    db.session.commit()
+        print(f"Current user: {current_user}")  # Debug log
 
-    return jsonify({
-        'id': post.id,
-        'title': post.title,
-        'content': post.content,
-        'author': post.author.username,
-        'created_at': post.created_at,
-        'tags': [tag.name for tag in post.tags]
-    }), 201
+        # Create post
+        post = Post(
+            title=data['title'],
+            content=data['content'],
+            user_id=current_user.id
+        )
+        print("Post object created")  # Debug log
 
-@bp.route('/api/posts/<int:post_id>', methods=['GET'])
-@login_required
-def update_post(post_id):
-    post = Post.query.get_or_404(post_id)
+        # Handle tags if present
+        if 'tags' in data and isinstance(data['tags'], list):
+            for tag_name in data['tags']:
+                tag = Tag.query.filter_by(name=tag_name).first()
+                if not tag:
+                    tag = Tag(name=tag_name)
+                    db.session.add(tag)
+                post.tags.append(tag)
+            print("Tags processed")  # Debug log
 
-    if post.author != current_user:
-        return jsonify({'error': 'Unauthorized'}), 403
-    
-    data = request.get_json()
-    post.title = data.get('title', post.title)
-    post.content = data.get('content', post.content)
+        db.session.add(post)
+        db.session.commit()
+        print("Post saved to database")  # Debug log
 
-    # Update tags
-    if 'tags' in data:
-        tags = []
-        for tag_name in data['tags']:
-            tag = Tag.query.filter_by(name=tag_name).first()
-            if not tag:
-                tag = Tag(name=tag_name)
-                db.session.add(tag)
-            tags.append(tag)
-        post.tags = tags
+        return jsonify({
+            'id': post.id,
+            'title': post.title,
+            'content': post.content,
+            'author': current_user.username,
+            'created_at': post.created_at.isoformat(),
+            'tags': [tag.name for tag in post.tags]
+        }), 201
 
-    db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in create_post: {str(e)}")  # Basic error
+        print("Detailed traceback:")  # Detailed error
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to create post: {str(e)}'}), 500
 
-    return jsonify({
-        'id': post.id,
-        'title': post.title,
-        'content': post.content,
-        'author': post.author.username,
-        'created_at': post.created_at,
-        'tags': [tag.name for tag in post.tags]
-    }), 200
-
-@bp.route('/api/posts/<int:post_id>', methods=['DELETE'])
-@login_required
-def delete_post(post_id):
-    post = Post.query.get_or_404(post_id)
-
-    if post.author != current_user:
-        return jsonify({'error': 'Unauthorized'}), 403
-    
-    db.session.delete(post)
-    db.session.commit()
-
-    return jsonify({'message': 'Post deleted successfully'}), 204
+@bp.route('/api/posts', methods=['GET'])
+def get_posts():
+    try:
+        posts = Post.query.order_by(Post.created_at.desc()).all()
+        return jsonify([{
+            'id': post.id,
+            'title': post.title,
+            'content': post.content,
+            'author': post.author.username,
+            'created_at': post.created_at.isoformat(),
+            'tags': [tag.name for tag in post.tags]
+        } for post in posts])
+    except Exception as e:
+        print(f"Error in get_posts: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Failed to fetch posts: {str(e)}'}), 500
